@@ -1,0 +1,1031 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UBID Sync Bridge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #F7F6F3;
+    --surface:   #FFFFFF;
+    --surface2:  #F0EEE9;
+    --border:    #E4E1D9;
+    --ink:       #1A1917;
+    --ink2:      #6B6760;
+    --ink3:      #A09D99;
+    --green:     #1E7B4B;
+    --green-bg:  #EAF5EE;
+    --amber:     #8A5A00;
+    --amber-bg:  #FEF6E4;
+    --red:       #962020;
+    --red-bg:    #FDF0F0;
+    --blue:      #1D4FAA;
+    --blue-bg:   #EEF3FC;
+    --accent:    #1A1917;
+    --radius:    10px;
+    --shadow:    0 1px 3px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.04);
+  }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  /* ── Shell ─────────────────────────────────────────────────────────────── */
+  .shell {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    grid-template-rows: 56px 1fr;
+    min-height: 100vh;
+  }
+
+  /* ── Topbar ─────────────────────────────────────────────────────────────── */
+  .topbar {
+    grid-column: 1 / -1;
+    background: var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .topbar-brand { display: flex; align-items: center; gap: 10px; }
+  .topbar-logo {
+    width: 28px; height: 28px;
+    background: white;
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600; color: var(--ink);
+  }
+  .topbar-title { font-size: 14px; font-weight: 600; color: #fff; letter-spacing: -.01em; }
+  .topbar-sub   { font-size: 12px; color: #888; margin-left: 2px; }
+  .topbar-right { display: flex; align-items: center; gap: 16px; }
+  .live-dot {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: #aaa;
+  }
+  .live-dot::before {
+    content: ''; width: 7px; height: 7px; border-radius: 50%;
+    background: #3DCA6E;
+    box-shadow: 0 0 0 2px rgba(61,202,110,.25);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{box-shadow:0 0 0 2px rgba(61,202,110,.25)} 50%{box-shadow:0 0 0 5px rgba(61,202,110,.1)} }
+  .sandbox-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px; color: #777;
+    background: rgba(255,255,255,.08);
+    padding: 3px 8px; border-radius: 4px;
+    border: 1px solid rgba(255,255,255,.1);
+  }
+
+  /* ── Sidebar ────────────────────────────────────────────────────────────── */
+  .sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 20px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .nav-section {
+    font-size: 10px; font-weight: 600; letter-spacing: .08em;
+    color: var(--ink3); text-transform: uppercase;
+    padding: 14px 18px 6px;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 18px;
+    border-radius: 0;
+    cursor: pointer;
+    transition: background .12s;
+    font-size: 13.5px; color: var(--ink2);
+    user-select: none;
+    border-left: 2px solid transparent;
+  }
+  .nav-item:hover { background: var(--surface2); }
+  .nav-item.active {
+    background: var(--blue-bg);
+    color: var(--blue);
+    border-left-color: var(--blue);
+    font-weight: 500;
+  }
+  .nav-icon { font-size: 15px; width: 18px; text-align: center; }
+  .nav-badge {
+    margin-left: auto;
+    background: var(--red-bg); color: var(--red);
+    font-size: 10px; font-weight: 600;
+    padding: 1px 6px; border-radius: 10px;
+  }
+
+  /* ── Main content ───────────────────────────────────────────────────────── */
+  .content { padding: 28px 32px; overflow-y: auto; }
+
+  /* ── Page header ────────────────────────────────────────────────────────── */
+  .page-header {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  .page-title { font-size: 22px; font-weight: 600; letter-spacing: -.02em; }
+  .page-sub   { font-size: 13px; color: var(--ink2); margin-top: 2px; }
+  .header-actions { display: flex; gap: 8px; }
+  .btn {
+    font-family: inherit; font-size: 13px; font-weight: 500;
+    padding: 7px 14px; border-radius: 7px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--ink); cursor: pointer;
+    transition: all .12s;
+  }
+  .btn:hover { background: var(--surface2); }
+  .btn-primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .btn-primary:hover { background: #333; }
+
+  /* ── Metrics ────────────────────────────────────────────────────────────── */
+  .metrics { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 24px; }
+  .metric {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    animation: fadeUp .4s ease both;
+  }
+  .metric:nth-child(2) { animation-delay:.05s }
+  .metric:nth-child(3) { animation-delay:.1s }
+  .metric:nth-child(4) { animation-delay:.15s }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+  .metric-label { font-size: 11.5px; color: var(--ink3); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+  .metric-value { font-size: 28px; font-weight: 600; letter-spacing: -.03em; line-height: 1; margin-bottom: 6px; }
+  .metric-delta { font-size: 12px; }
+  .delta-up   { color: var(--green); }
+  .delta-warn { color: var(--amber); }
+  .delta-down { color: var(--red); }
+
+  /* ── Two-col layout ─────────────────────────────────────────────────────── */
+  .two-col { display: grid; grid-template-columns: 340px 1fr; gap: 16px; }
+
+  /* ── Panel ──────────────────────────────────────────────────────────────── */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .panel-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .panel-title { font-size: 12px; font-weight: 600; color: var(--ink2); text-transform: uppercase; letter-spacing: .06em; }
+  .panel-body  { padding: 12px; }
+
+  /* ── Event list ─────────────────────────────────────────────────────────── */
+  .event-list { display: flex; flex-direction: column; gap: 4px; }
+  .event-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: background .1s;
+    border: 1px solid transparent;
+  }
+  .event-item:hover { background: var(--surface2); }
+  .event-item.active {
+    background: var(--blue-bg);
+    border-color: #C8D9F5;
+  }
+  .event-icon {
+    width: 32px; height: 32px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; flex-shrink: 0;
+    font-family: 'DM Mono', monospace;
+  }
+  .icon-sw   { background: #E8F0FE; color: #1D4FAA; }
+  .icon-fa   { background: #E6F4EA; color: #1E7B4B; }
+  .icon-se   { background: #FEF3E2; color: #8A5A00; }
+  .icon-cf   { background: #FDF0F0; color: #962020; }
+  .event-meta { flex: 1; min-width: 0; }
+  .event-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .event-sub  { font-size: 11.5px; color: var(--ink3); margin-top: 1px; }
+  .event-item.active .event-name { color: var(--blue); }
+
+  /* ── Badges ─────────────────────────────────────────────────────────────── */
+  .badge {
+    font-size: 11px; font-weight: 600; padding: 2px 8px;
+    border-radius: 20px; white-space: nowrap; flex-shrink: 0;
+  }
+  .badge-green  { background: var(--green-bg);  color: var(--green); }
+  .badge-amber  { background: var(--amber-bg);  color: var(--amber); }
+  .badge-red    { background: var(--red-bg);    color: var(--red); }
+  .badge-blue   { background: var(--blue-bg);   color: var(--blue); }
+  .badge-grey   { background: var(--surface2);  color: var(--ink2); }
+
+  /* ── Detail panel ───────────────────────────────────────────────────────── */
+  .detail-section { padding: 16px 18px; border-bottom: 1px solid var(--border); }
+  .detail-section:last-child { border-bottom: none; }
+  .detail-section-title {
+    font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .07em; color: var(--ink3); margin-bottom: 10px;
+  }
+  .kv-grid { display: grid; grid-template-columns: 130px 1fr; gap: 6px 12px; align-items: start; }
+  .kv-key   { font-size: 12.5px; color: var(--ink2); padding-top: 1px; }
+  .kv-val   { font-size: 12.5px; font-weight: 500; font-family: 'DM Mono', monospace; }
+  .kv-val.old { color: var(--red); text-decoration: line-through; opacity: .7; }
+  .kv-val.new { color: var(--green); }
+
+  /* ── Write targets ──────────────────────────────────────────────────────── */
+  .write-targets { display: flex; flex-direction: column; gap: 6px; }
+  .write-target {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--surface2);
+    border-radius: 7px;
+    font-size: 13px;
+  }
+  .write-name { font-weight: 500; }
+  .write-id   { font-size: 11.5px; color: var(--ink3); font-family: 'DM Mono', monospace; }
+  .write-right { display: flex; gap: 8px; align-items: center; }
+  .write-method { font-size: 11px; color: var(--ink3); }
+
+  /* ── Pipeline ───────────────────────────────────────────────────────────── */
+  .pipeline {
+    display: flex; align-items: center; gap: 0;
+    overflow-x: auto; padding: 4px 0;
+  }
+  .pipe-step { flex: 1; min-width: 0; }
+  .pipe-box {
+    padding: 12px 10px; border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    text-align: center;
+  }
+  .pipe-box.done {
+    background: var(--green-bg);
+    border-color: #A8D9BC;
+  }
+  .pipe-num  { font-size: 10px; color: var(--ink3); font-weight: 600; letter-spacing: .05em; margin-bottom: 3px; }
+  .pipe-name { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+  .pipe-sub  { font-size: 11px; color: var(--ink3); margin-top: 2px; }
+  .pipe-box.done .pipe-name { color: var(--green); }
+  .pipe-box.done .pipe-sub  { color: #4A9B6A; }
+  .pipe-box.done .pipe-num  { color: #4A9B6A; }
+  .pipe-arrow {
+    font-size: 16px; color: var(--border); padding: 0 6px; flex-shrink: 0;
+    margin-bottom: 16px;
+  }
+
+  /* ── Data table ─────────────────────────────────────────────────────────── */
+  .data-table { width: 100%; border-collapse: collapse; }
+  .data-table th {
+    text-align: left; font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .06em;
+    color: var(--ink3); padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+  }
+  .data-table td {
+    padding: 11px 14px; font-size: 13px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:hover td { background: var(--surface2); }
+  .dept-name  { font-weight: 500; }
+  .dept-tier  { font-size: 12px; color: var(--ink3); font-family: 'DM Mono', monospace; }
+
+  /* ── Audit timeline ─────────────────────────────────────────────────────── */
+  .audit-timeline { padding: 4px 0; }
+  .audit-row {
+    display: flex; gap: 14px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .audit-row:last-child { border-bottom: none; }
+  .audit-dot-col { display: flex; flex-direction: column; align-items: center; padding-top: 4px; }
+  .audit-dot {
+    width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+  }
+  .audit-line {
+    width: 1px; background: var(--border); flex: 1; margin-top: 4px; min-height: 18px;
+  }
+  .audit-content { flex: 1; }
+  .audit-time {
+    font-size: 11px; color: var(--ink3);
+    font-family: 'DM Mono', monospace; margin-bottom: 2px;
+  }
+  .audit-text { font-size: 13px; }
+  .audit-policy {
+    display: inline-block;
+    font-size: 11px; color: var(--amber);
+    background: var(--amber-bg);
+    padding: 1px 7px; border-radius: 4px;
+    margin-top: 4px;
+  }
+
+  /* ── Conflict box ───────────────────────────────────────────────────────── */
+  .conflict-box {
+    background: var(--amber-bg);
+    border: 1px solid #F0D090;
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 0;
+  }
+  .conflict-title {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .07em; color: var(--amber); margin-bottom: 10px;
+  }
+  .conflict-candidates {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;
+  }
+  .candidate {
+    background: var(--surface); border-radius: 7px; padding: 10px 12px;
+    border: 1px solid var(--border);
+  }
+  .candidate.winner { border-color: #A8D9BC; }
+  .candidate-src { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink3); margin-bottom: 4px; }
+  .candidate-val { font-size: 13px; font-weight: 500; font-family: 'DM Mono', monospace; }
+  .candidate.winner .candidate-val { color: var(--green); }
+  .candidate.loser  .candidate-val { color: var(--ink3); text-decoration: line-through; }
+  .conflict-policy {
+    font-size: 12px; color: var(--amber); font-weight: 500;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .conflict-policy::before { content: '↳'; }
+
+  /* ── Sections (tabs) ────────────────────────────────────────────────────── */
+  .section { display: none; animation: fadeIn .2s ease; }
+  .section.active { display: block; }
+  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+
+  /* ── Flowchart ──────────────────────────────────────────────────────────── */
+  .flow-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 24px;
+    margin-bottom: 24px;
+  }
+  .flow-title {
+    font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .07em; color: var(--ink3); margin-bottom: 24px;
+    text-align: center;
+  }
+  .flow-diagram {
+    display: flex; align-items: center; justify-content: center; gap: 0;
+    flex-wrap: nowrap; overflow-x: auto; padding-bottom: 8px;
+  }
+  .flow-node {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 6px; flex-shrink: 0;
+  }
+  .flow-box {
+    padding: 10px 16px;
+    border-radius: 9px;
+    border: 1.5px solid var(--border);
+    background: var(--surface);
+    text-align: center;
+    min-width: 100px;
+    transition: box-shadow .15s;
+  }
+  .flow-box:hover { box-shadow: var(--shadow); }
+  .flow-box.source-sws  { background: #EEF3FC; border-color: #BDD0F5; }
+  .flow-box.bridge      { background: var(--surface2); border-color: var(--border); }
+  .flow-box.dept        { background: var(--green-bg); border-color: #A8D9BC; }
+  .flow-box .fn  { font-size: 12.5px; font-weight: 600; }
+  .flow-box .fs  { font-size: 11px; color: var(--ink3); margin-top: 2px; }
+  .flow-arrow {
+    font-size: 18px; color: #CCC; padding: 0 6px; flex-shrink: 0; margin-top: -8px;
+  }
+  .flow-stacked {
+    display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;
+  }
+  .flow-stacked .flow-box { min-width: 130px; }
+  .flow-return {
+    width: 100%; height: 28px; margin: 16px 0 4px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    font-size: 12px; color: var(--ink3);
+  }
+  .flow-return-line {
+    flex: 1; height: 1px; background: var(--border);
+    background: repeating-linear-gradient(90deg,var(--border),var(--border) 6px,transparent 6px,transparent 12px);
+  }
+  .flow-return-label {
+    font-size: 11.5px; color: var(--ink3); background: var(--surface); padding: 0 10px;
+  }
+
+  /* ── Empty state ────────────────────────────────────────────────────────── */
+  .empty-detail {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; padding: 48px 24px; gap: 8px;
+  }
+  .empty-icon { font-size: 28px; opacity: .3; }
+  .empty-text { font-size: 13px; color: var(--ink3); }
+
+  /* ── Responsive ─────────────────────────────────────────────────────────── */
+  @media (max-width: 900px) {
+    .shell { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .metrics { grid-template-columns: repeat(2,1fr); }
+    .two-col { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ── Topbar ─────────────────────────────────────────────────────────── -->
+  <header class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-logo">UB</div>
+      <div>
+        <span class="topbar-title">UBID Sync Bridge</span>
+        <span class="topbar-sub"> &nbsp;Karnataka Commerce &amp; Industries</span>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span class="live-dot">Bridge running</span>
+      <span class="sandbox-tag">SANDBOX</span>
+    </div>
+  </header>
+
+  <!-- ── Sidebar ───────────────────────────────────────────────────────── -->
+  <nav class="sidebar">
+    <div class="nav-section">Overview</div>
+    <div class="nav-item active" onclick="showSection('events',this)">
+      <span class="nav-icon">⚡</span> Live Events
+    </div>
+    <div class="nav-item" onclick="showSection('trace',this)">
+      <span class="nav-icon">⊙</span> Event Trace
+    </div>
+    <div class="nav-section">Systems</div>
+    <div class="nav-item" onclick="showSection('depts',this)">
+      <span class="nav-icon">◈</span> Department Health
+    </div>
+    <div class="nav-item" onclick="showSection('audit',this)">
+      <span class="nav-icon">≡</span> Audit Log
+    </div>
+    <div class="nav-section">Architecture</div>
+    <div class="nav-item" onclick="showSection('flow',this)">
+      <span class="nav-icon">⟶</span> How it works
+    </div>
+  </nav>
+
+  <!-- ── Content ───────────────────────────────────────────────────────── -->
+  <main class="content">
+
+    <!-- ── Metrics ────────────────────────────────────────────────────── -->
+    <div class="metrics">
+      <div class="metric">
+        <div class="metric-label">Events today</div>
+        <div class="metric-value">1,248</div>
+        <div class="metric-delta delta-up">↑ 12% vs yesterday</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Propagated</div>
+        <div class="metric-value">1,231</div>
+        <div class="metric-delta delta-up">98.6% success rate</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Conflicts resolved</div>
+        <div class="metric-value">4</div>
+        <div class="metric-delta delta-warn">Auto-resolved today</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Dead letter queue</div>
+        <div class="metric-value">3</div>
+        <div class="metric-delta delta-down">↑ Needs review</div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <!-- SECTION: LIVE EVENTS                                            -->
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <div id="sec-events" class="section active">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Live Events</div>
+          <div class="page-sub">Real-time sync events between SWS and department systems</div>
+        </div>
+        <div class="header-actions">
+          <button class="btn">Filter</button>
+          <button class="btn btn-primary">Refresh</button>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <!-- Event list -->
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Incoming</span>
+            <span class="badge badge-green">Live</span>
+          </div>
+          <div class="panel-body">
+            <div class="event-list" id="event-list">
+              <div class="event-item active" onclick="selectEvent(0,this)">
+                <div class="event-icon icon-sw">SW</div>
+                <div class="event-meta">
+                  <div class="event-name">Address change — UBID 4821</div>
+                  <div class="event-sub">SWS → Factories, Shop Estab · 14:32:01</div>
+                </div>
+                <span class="badge badge-green">done</span>
+              </div>
+              <div class="event-item" onclick="selectEvent(1,this)">
+                <div class="event-icon icon-fa">FA</div>
+                <div class="event-meta">
+                  <div class="event-name">Signatory update — UBID 9034</div>
+                  <div class="event-sub">Factories → SWS · 14:31:44</div>
+                </div>
+                <span class="badge badge-green">done</span>
+              </div>
+              <div class="event-item" onclick="selectEvent(2,this)">
+                <div class="event-icon icon-cf">CF</div>
+                <div class="event-meta">
+                  <div class="event-name">Concurrent update — UBID 3310</div>
+                  <div class="event-sub">SWS + Factories conflict · 14:30:58</div>
+                </div>
+                <span class="badge badge-amber">conflict</span>
+              </div>
+              <div class="event-item" onclick="selectEvent(3,this)">
+                <div class="event-icon icon-se">SE</div>
+                <div class="event-meta">
+                  <div class="event-name">Phone update — UBID 7712</div>
+                  <div class="event-sub">Shop Estab → SWS · 14:29:13</div>
+                </div>
+                <span class="badge badge-green">done</span>
+              </div>
+              <div class="event-item" onclick="selectEvent(4,this)">
+                <div class="event-icon icon-sw">SW</div>
+                <div class="event-meta">
+                  <div class="event-name">GST update — UBID 5503</div>
+                  <div class="event-sub">SWS → Factories · 14:28:07</div>
+                </div>
+                <span class="badge badge-red">DLQ</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Detail panel -->
+        <div class="panel" id="detail-panel">
+          <div class="panel-header">
+            <span class="panel-title" id="detail-title">Event Detail</span>
+          </div>
+          <div id="detail-body">
+            <div class="empty-detail">
+              <div class="empty-icon">◎</div>
+              <div class="empty-text">Select an event to see details</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <!-- SECTION: EVENT TRACE                                            -->
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <div id="sec-trace" class="section">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Event Trace</div>
+          <div class="page-sub">Step-by-step pipeline view · UBID 4821 · ADDRESS_CHANGE</div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-bottom:16px">
+        <div class="panel-header"><span class="panel-title">Pipeline Steps</span><span class="badge badge-green">All passed</span></div>
+        <div class="panel-body" style="padding:20px">
+          <div class="pipeline">
+            <div class="pipe-step"><div class="pipe-box done"><div class="pipe-num">STEP 1</div><div class="pipe-name">Captured</div><div class="pipe-sub">SWS webhook</div></div></div>
+            <div class="pipe-arrow">→</div>
+            <div class="pipe-step"><div class="pipe-box done"><div class="pipe-num">STEP 2</div><div class="pipe-name">Routed</div><div class="pipe-sub">2 targets found</div></div></div>
+            <div class="pipe-arrow">→</div>
+            <div class="pipe-step"><div class="pipe-box done"><div class="pipe-num">STEP 3</div><div class="pipe-name">Translated</div><div class="pipe-sub">Adapters applied</div></div></div>
+            <div class="pipe-arrow">→</div>
+            <div class="pipe-step"><div class="pipe-box done"><div class="pipe-num">STEP 4</div><div class="pipe-name">Written</div><div class="pipe-sub">2 / 2 success</div></div></div>
+            <div class="pipe-arrow">→</div>
+            <div class="pipe-step"><div class="pipe-box done"><div class="pipe-num">STEP 5</div><div class="pipe-name">Audited</div><div class="pipe-sub">Log written</div></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Payload</span></div>
+          <div class="detail-section">
+            <div class="kv-grid">
+              <span class="kv-key">UBID</span><span class="kv-val">KA-UBID-4821</span>
+              <span class="kv-key">Service</span><span class="kv-val">ADDRESS_CHANGE</span>
+              <span class="kv-key">Source</span><span class="kv-val">SWS</span>
+              <span class="kv-key">Old address</span><span class="kv-val old">14, MG Road, Bengaluru</span>
+              <span class="kv-key">New address</span><span class="kv-val new">22, Residency Road, BLR</span>
+              <span class="kv-key">Idem key</span><span class="kv-val">a3f8c2…d91b</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Department Writes</span></div>
+          <div style="padding:12px">
+            <div class="write-targets">
+              <div class="write-target">
+                <div><div class="write-name">Factories Department</div><div class="write-id">FAC-9034 · Adapter v2.1 · REST</div></div>
+                <div class="write-right"><span class="write-method">200</span><span class="badge badge-green">OK</span></div>
+              </div>
+              <div class="write-target">
+                <div><div class="write-name">Shop Establishment</div><div class="write-id">SE-4821 · Adapter v1.8 · REST</div></div>
+                <div class="write-right"><span class="write-method">200</span><span class="badge badge-green">OK</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <!-- SECTION: DEPARTMENT HEALTH                                       -->
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <div id="sec-depts" class="section">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Department Health</div>
+          <div class="page-sub">Connected systems and ingestion status</div>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-primary">+ Add Department</button>
+        </div>
+      </div>
+      <div class="panel">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Department</th>
+              <th>Ingestion tier</th>
+              <th>Adapter</th>
+              <th>Last sync</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><div class="dept-name">Factories Department</div></td>
+              <td><span class="dept-tier">Tier 2 · REST polling</span></td>
+              <td><span class="badge badge-grey">v2.1</span></td>
+              <td>2 min ago</td>
+              <td><span class="badge badge-green">Healthy</span></td>
+            </tr>
+            <tr>
+              <td><div class="dept-name">Shop Establishment</div></td>
+              <td><span class="dept-tier">Tier 1 · Webhook</span></td>
+              <td><span class="badge badge-grey">v1.8</span></td>
+              <td>30 sec ago</td>
+              <td><span class="badge badge-green">Healthy</span></td>
+            </tr>
+            <tr>
+              <td><div class="dept-name">Labour Department</div></td>
+              <td><span class="dept-tier">Tier 3 · Debezium CDC</span></td>
+              <td><span class="badge badge-grey">v1.2</span></td>
+              <td>8 min ago</td>
+              <td><span class="badge badge-amber">Slow</span></td>
+            </tr>
+            <tr>
+              <td><div class="dept-name">Fire Safety</div></td>
+              <td><span class="dept-tier">Tier 2 · REST polling</span></td>
+              <td><span class="badge badge-grey">v1.0</span></td>
+              <td>1 min ago</td>
+              <td><span class="badge badge-green">Healthy</span></td>
+            </tr>
+            <tr>
+              <td><div class="dept-name">KSPCB (Pollution Control)</div></td>
+              <td><span class="dept-tier">Tier 2 · REST polling</span></td>
+              <td><span class="badge badge-grey">v1.1</span></td>
+              <td>22 min ago</td>
+              <td><span class="badge badge-red">Error</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <!-- SECTION: AUDIT LOG                                              -->
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <div id="sec-audit" class="section">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Audit Log</div>
+          <div class="page-sub">Append-only trace of every event, conflict, and resolution</div>
+        </div>
+        <div class="header-actions">
+          <button class="btn">Export CSV</button>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-body" style="padding:16px 20px">
+          <div class="audit-timeline">
+
+            <div class="audit-row">
+              <div class="audit-dot-col"><div class="audit-dot" style="background:var(--green)"></div><div class="audit-line"></div></div>
+              <div class="audit-content">
+                <div class="audit-time">14:32:01 · evt_a3f8c2 · ubid:4821</div>
+                <div class="audit-text"><strong>ADDRESS_CHANGE</strong> · SWS → Factories · <span style="color:var(--green)">success</span></div>
+              </div>
+            </div>
+
+            <div class="audit-row">
+              <div class="audit-dot-col"><div class="audit-dot" style="background:var(--green)"></div><div class="audit-line"></div></div>
+              <div class="audit-content">
+                <div class="audit-time">14:32:01 · evt_a3f8c2 · ubid:4821</div>
+                <div class="audit-text"><strong>ADDRESS_CHANGE</strong> · SWS → Shop Estab · <span style="color:var(--green)">success</span></div>
+              </div>
+            </div>
+
+            <div class="audit-row">
+              <div class="audit-dot-col"><div class="audit-dot" style="background:var(--green)"></div><div class="audit-line"></div></div>
+              <div class="audit-content">
+                <div class="audit-time">14:31:44 · evt_b9d012 · ubid:9034</div>
+                <div class="audit-text"><strong>SIGNATORY_UPDATE</strong> · Factories → SWS · <span style="color:var(--green)">success</span></div>
+              </div>
+            </div>
+
+            <div class="audit-row">
+              <div class="audit-dot-col"><div class="audit-dot" style="background:var(--amber)"></div><div class="audit-line"></div></div>
+              <div class="audit-content">
+                <div class="audit-time">14:30:58 · evt_c1e450 · ubid:3310</div>
+                <div class="audit-text"><strong>ADDRESS_CHANGE</strong> · Conflict detected · <span style="color:var(--amber)">resolved</span></div>
+                <div class="audit-policy">Policy: SWS Wins · discarded value preserved in log</div>
+              </div>
+            </div>
+
+            <div class="audit-row">
+              <div class="audit-dot-col"><div class="audit-dot" style="background:var(--green)"></div><div class="audit-line"></div></div>
+              <div class="audit-content">
+                <div class="audit-time">14:29:13 · evt_d7a291 · ubid:7712</div>
+                <div class="audit-text"><strong>PHONE_UPDATE</strong> · Shop Estab → SWS · <span style="color:var(--green)">success</span></div>
+              </div>
+            </div>
+
+            <div class="audit-row">
+              <div class="audit-dot-col"><div class="audit-dot" style="background:var(--red)"></div></div>
+              <div class="audit-content">
+                <div class="audit-time">14:28:07 · evt_e3b104 · ubid:5503</div>
+                <div class="audit-text"><strong>GST_UPDATE</strong> · SWS → Factories · retry 5/5 · <span style="color:var(--red)">moved to DLQ</span></div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <!-- SECTION: HOW IT WORKS                                           -->
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <div id="sec-flow" class="section">
+      <div class="page-header">
+        <div>
+          <div class="page-title">How it works</div>
+          <div class="page-sub">Architecture of the UBID Sync Bridge</div>
+        </div>
+      </div>
+
+      <!-- Main flow -->
+      <div class="flow-wrap">
+        <div class="flow-title">Bidirectional Propagation Pipeline</div>
+        <div class="flow-diagram">
+          <div class="flow-node">
+            <div class="flow-box source-sws"><div class="fn">SWS</div><div class="fs">Single Window</div></div>
+          </div>
+          <div class="flow-arrow">⟶</div>
+          <div class="flow-node">
+            <div class="flow-box bridge"><div class="fn">Inbound Listener</div><div class="fs">webhook / poll / CDC</div></div>
+          </div>
+          <div class="flow-arrow">⟶</div>
+          <div class="flow-node">
+            <div class="flow-box bridge"><div class="fn">Event Router</div><div class="fs">UBID lookup</div></div>
+          </div>
+          <div class="flow-arrow">⟶</div>
+          <div class="flow-node">
+            <div class="flow-box bridge"><div class="fn">Schema Translator</div><div class="fs">adapter registry</div></div>
+          </div>
+          <div class="flow-arrow">⟶</div>
+          <div class="flow-node">
+            <div class="flow-box bridge"><div class="fn">Outbound Writer</div><div class="fs">idempotent write</div></div>
+          </div>
+          <div class="flow-arrow">⟶</div>
+          <div class="flow-node">
+            <div class="flow-stacked">
+              <div class="flow-box dept"><div class="fn">Factories</div></div>
+              <div class="flow-box dept"><div class="fn">Shop Estab</div></div>
+              <div class="flow-box dept"><div class="fn">Labour…</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="flow-return">
+          <div class="flow-return-line"></div>
+          <div class="flow-return-label">← Dept changes flow back through the same pipeline to SWS</div>
+          <div class="flow-return-line"></div>
+        </div>
+      </div>
+
+      <!-- Conflict flow -->
+      <div class="flow-wrap">
+        <div class="flow-title">Conflict Detection &amp; Resolution</div>
+        <div class="flow-diagram" style="gap:8px">
+          <div class="flow-stacked" style="gap:6px">
+            <div class="flow-box source-sws" style="min-width:130px"><div class="fn">SWS</div><div class="fs">Address: Residency Rd</div></div>
+            <div class="flow-box dept" style="min-width:130px"><div class="fn">Factories</div><div class="fs">Address: Church St</div></div>
+          </div>
+          <div class="flow-arrow">⟶</div>
+          <div class="flow-node">
+            <div class="flow-box" style="background:#FEF6E4;border-color:#F0D090;min-width:130px">
+              <div class="fn">Conflict Engine</div><div class="fs">30s window · Redis</div>
+            </div>
+          </div>
+          <div class="flow-arrow">⟶</div>
+          <div class="flow-node">
+            <div class="flow-box" style="background:#F3F0FF;border-color:#C9BEF5;min-width:130px">
+              <div class="fn">Policy Applied</div><div class="fs">SWS Wins (default)</div>
+            </div>
+          </div>
+          <div class="flow-arrow">⟶</div>
+          <div class="flow-stacked" style="gap:6px">
+            <div class="flow-box" style="background:var(--green-bg);border-color:#A8D9BC;min-width:150px">
+              <div class="fn" style="color:var(--green)">Written ✓</div><div class="fs">Residency Rd applied</div>
+            </div>
+            <div class="flow-box" style="background:var(--surface2);border-color:var(--border);min-width:150px">
+              <div class="fn" style="color:var(--ink3)">Stored in audit</div><div class="fs">Church St preserved</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ingestion tiers -->
+      <div class="flow-wrap">
+        <div class="flow-title">Department Ingestion Tiers</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+          <div style="padding:16px;background:var(--surface2);border-radius:9px;border:1px solid var(--border)">
+            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--blue);margin-bottom:8px">Tier 1</div>
+            <div style="font-size:14px;font-weight:600;margin-bottom:6px">Webhook Push</div>
+            <div style="font-size:12.5px;color:var(--ink2)">Department pushes events to the Bridge in real-time. Lowest latency.</div>
+            <div style="margin-top:10px"><span class="badge badge-green">Shop Establishment</span></div>
+          </div>
+          <div style="padding:16px;background:var(--surface2);border-radius:9px;border:1px solid var(--border)">
+            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--amber);margin-bottom:8px">Tier 2</div>
+            <div style="font-size:14px;font-weight:600;margin-bottom:6px">REST Polling</div>
+            <div style="font-size:12.5px;color:var(--ink2)">Bridge polls department API on schedule. Detects changes by hash comparison.</div>
+            <div style="margin-top:10px;display:flex;gap:4px;flex-wrap:wrap"><span class="badge badge-amber">Factories</span><span class="badge badge-amber">Fire Safety</span></div>
+          </div>
+          <div style="padding:16px;background:var(--surface2);border-radius:9px;border:1px solid var(--border)">
+            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink2);margin-bottom:8px">Tier 3</div>
+            <div style="font-size:14px;font-weight:600;margin-bottom:6px">Debezium CDC</div>
+            <div style="font-size:12.5px;color:var(--ink2)">Reads DB change log. No app-level changes needed. Zero production DB impact.</div>
+            <div style="margin-top:10px"><span class="badge badge-grey">Labour Dept</span></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- end flow -->
+
+  </main>
+</div>
+
+<script>
+// ── Event detail data ────────────────────────────────────────────────────────
+const events = [
+  {
+    title: "UBID 4821 · Address Change",
+    sections: [
+      { label: "Event Info", html: `
+        <div class="kv-grid">
+          <span class="kv-key">UBID</span><span class="kv-val">KA-UBID-4821</span>
+          <span class="kv-key">Service</span><span class="kv-val">ADDRESS_CHANGE</span>
+          <span class="kv-key">Source</span><span class="kv-val">SWS</span>
+          <span class="kv-key">Time</span><span class="kv-val">14:32:01 UTC</span>
+          <span class="kv-key">Old address</span><span class="kv-val old">14, MG Road, Bengaluru</span>
+          <span class="kv-key">New address</span><span class="kv-val new">22, Residency Road, Bengaluru</span>
+          <span class="kv-key">Idem key</span><span class="kv-val">a3f8c2…d91b</span>
+        </div>` },
+      { label: "Target Writes", html: `
+        <div class="write-targets">
+          <div class="write-target"><div><div class="write-name">Factories Dept</div><div class="write-id">FAC-9034 · Adapter v2.1</div></div><div class="write-right"><span class="write-method">REST</span><span class="badge badge-green">200 OK</span></div></div>
+          <div class="write-target"><div><div class="write-name">Shop Establishment</div><div class="write-id">SE-4821 · Adapter v1.8</div></div><div class="write-right"><span class="write-method">REST</span><span class="badge badge-green">200 OK</span></div></div>
+        </div>` }
+    ]
+  },
+  {
+    title: "UBID 9034 · Signatory Update",
+    sections: [
+      { label: "Event Info", html: `
+        <div class="kv-grid">
+          <span class="kv-key">UBID</span><span class="kv-val">KA-UBID-9034</span>
+          <span class="kv-key">Service</span><span class="kv-val">SIGNATORY_UPDATE</span>
+          <span class="kv-key">Source</span><span class="kv-val">Factories</span>
+          <span class="kv-key">Time</span><span class="kv-val">14:31:44 UTC</span>
+          <span class="kv-key">Old signatory</span><span class="kv-val old">Ramesh Kumar</span>
+          <span class="kv-key">New signatory</span><span class="kv-val new">Priya Sharma</span>
+        </div>` },
+      { label: "Target Writes", html: `
+        <div class="write-targets">
+          <div class="write-target"><div><div class="write-name">SWS</div><div class="write-id">via REST API</div></div><div class="write-right"><span class="write-method">REST</span><span class="badge badge-green">200 OK</span></div></div>
+        </div>` }
+    ]
+  },
+  {
+    title: "UBID 3310 · Conflict Detected",
+    conflict: true,
+    sections: [
+      { label: "Event Info", html: `
+        <div class="kv-grid">
+          <span class="kv-key">UBID</span><span class="kv-val">KA-UBID-3310</span>
+          <span class="kv-key">Service</span><span class="kv-val">ADDRESS_CHANGE</span>
+          <span class="kv-key">Window</span><span class="kv-val">30 seconds</span>
+          <span class="kv-key">Time</span><span class="kv-val">14:30:58 UTC</span>
+        </div>` },
+      { label: "Conflict", html: `
+        <div class="conflict-box">
+          <div class="conflict-title">⚠ Concurrent updates detected</div>
+          <div class="conflict-candidates">
+            <div class="candidate winner">
+              <div class="candidate-src">SWS (winner)</div>
+              <div class="candidate-val">8, Brigade Road</div>
+            </div>
+            <div class="candidate loser">
+              <div class="candidate-src">Factories (discarded)</div>
+              <div class="candidate-val">8, Church Street</div>
+            </div>
+          </div>
+          <div class="conflict-policy">Policy applied: SWS Wins (default) · discarded value stored in audit</div>
+        </div>` }
+    ]
+  },
+  {
+    title: "UBID 7712 · Phone Update",
+    sections: [
+      { label: "Event Info", html: `
+        <div class="kv-grid">
+          <span class="kv-key">UBID</span><span class="kv-val">KA-UBID-7712</span>
+          <span class="kv-key">Service</span><span class="kv-val">PHONE_UPDATE</span>
+          <span class="kv-key">Source</span><span class="kv-val">Shop Establishment</span>
+          <span class="kv-key">Old phone</span><span class="kv-val old">+91 80 4112 0000</span>
+          <span class="kv-key">New phone</span><span class="kv-val new">+91 98867 44321</span>
+        </div>` },
+      { label: "Target Writes", html: `
+        <div class="write-targets">
+          <div class="write-target"><div><div class="write-name">SWS</div><div class="write-id">via REST API</div></div><div class="write-right"><span class="badge badge-green">200 OK</span></div></div>
+        </div>` }
+    ]
+  },
+  {
+    title: "UBID 5503 · GST Update — DLQ",
+    sections: [
+      { label: "Event Info", html: `
+        <div class="kv-grid">
+          <span class="kv-key">UBID</span><span class="kv-val">KA-UBID-5503</span>
+          <span class="kv-key">Service</span><span class="kv-val">GST_UPDATE</span>
+          <span class="kv-key">Source</span><span class="kv-val">SWS</span>
+          <span class="kv-key">Status</span><span class="kv-val" style="color:var(--red)">Dead Letter Queue</span>
+          <span class="kv-key">Retries</span><span class="kv-val">5 / 5 exhausted</span>
+          <span class="kv-key">Reason</span><span class="kv-val">Factories API timeout</span>
+        </div>` },
+      { label: "Action Required", html: `
+        <div style="padding:12px 14px;background:var(--red-bg);border-radius:8px;border:1px solid #F5C0C0;font-size:13px;color:var(--red)">
+          This event has been moved to the Dead Letter Queue after 5 failed retries. An alert has been sent to the operations team. Replay is available once the Factories API recovers — the original idempotency key will be reused, preventing duplicate writes.
+        </div>` }
+    ]
+  }
+];
+
+function selectEvent(i, el) {
+  document.querySelectorAll('.event-item').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  const ev = events[i];
+  document.getElementById('detail-title').textContent = ev.title;
+  document.getElementById('detail-body').innerHTML = ev.sections.map(s => `
+    <div class="detail-section">
+      <div class="detail-section-title">${s.label}</div>
+      ${s.html}
+    </div>`).join('');
+}
+
+function showSection(name, el) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.getElementById('sec-' + name).classList.add('active');
+}
+
+// Load first event
+selectEvent(0, document.querySelector('.event-item'));
+</script>
+</body>
+</html>
